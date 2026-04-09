@@ -1,15 +1,3 @@
-<!-- ==================== 主视图组件 ==================== -->
-<!-- 
-  MainView.vue - 电力系统模拟主界面
-  
-  功能概述：
-  1. 画布拖拽：支持从组件栏拖拽变压器、用户、开关到画布
-  2. 连线操作：支持组件之间的连线，形成电力网络拓扑
-  3. AI 调度：调用后端 AI 智能体进行电力分配调度
-  4. 仿真引擎：支持多时间片的仿真运行
-  5. 规划建议：AI 分析网络并提供优化建议
-  6. 数据可视化：ECharts 图表展示变压器功率、线路功耗等
--->
 <script setup>
 // ==================== Vue 相关导入 ====================
 import { ref, onBeforeUnmount, computed, onMounted, watch, nextTick, markRaw } from 'vue'
@@ -134,19 +122,19 @@ const paramEditor = ref({
 // ==================== 用户类型配置 ====================
 // 用户类型功率范围
 const USER_TYPE_RANGES = {
-  residential: { min: 0, max: 300, default: 150 },    // 居民用户：0-300kVA，默认 150kVA
-  commercial: { min: 0, max: 600, default: 250 },     // 商业用户：0-600kVA，默认 250kVA
-  industrial: { min: 0, max: 999, default: 800 },     // 工业用户：0-999kVA，默认 800kVA
+  residential: { min: 0, max: 300, default: 150 },    // 居民用户：0-300kW，默认 150kW
+  commercial: { min: 0, max: 600, default: 250 },     // 商业用户：0-600kW，默认 250kW
+  industrial: { min: 0, max: 999, default: 800 },     // 工业用户：0-999kW，默认 800kW
 }
 
-// 默认负荷曲线（实际功率值，单位 kVA）
+// 默认负荷曲线（实际功率值，单位 kW）
 // 时间点：0:00, 4:00, 8:00, 12:00, 16:00, 20:00
 const DEFAULT_LOAD_PROFILES = {
-  // 居民用户：50-200kVA，早晚双高峰（16:00-20:00 最高）
+  // 居民用户：50-200kW，早晚双高峰（16:00-20:00 最高）
   residential: [60, 50, 120, 90, 180, 200],
-  // 商业用户：20-500kVA，白天营业时段高（10:00-16:00 最高）
+  // 商业用户：20-500kW，白天营业时段高（10:00-16:00 最高）
   commercial: [20, 20, 150, 400, 500, 200],
-  // 工业用户：200-800kVA，白天持续高负荷（8:00-16:00 最高）
+  // 工业用户：200-800kW，白天持续高负荷（8:00-16:00 最高）
   industrial: [200, 200, 400, 800, 600, 350],
 }
 
@@ -1353,9 +1341,11 @@ const getLineSafetyStyle = line => {
   // 1. 开关到用户：功耗越高颜色越明显（渐变青->红）
   // 简单判断：如果有一端是用户，则认为是末端线路
   if (from?.type === 'user' || to?.type === 'user') {
-    // 这里设定一个参考最大值（例如 200kVA）来计算渐变，或者直接用功率大小映射
-    // 假设 0kVA 为亮青，200kVA 以上为亮红
-    const ratio = Math.min(power / 200, 1)
+    // 根据用户类型获取对应的功率最大值
+    const userNode = from?.type === 'user' ? from : to
+    const userType = userNode?.userType || 'residential'
+    const maxPower = USER_TYPE_RANGES[userType]?.max || 300
+    const ratio = Math.min(power / maxPower, 1)
     // 亮青色 #22d3ee (hsl 187, 94%, 53%) -> 亮红色 #f87171 (hsl 0, 93%, 71%)
     // 增加亮度，使其在暗色背景下更醒目
     return { color: `hsl(${187 - ratio * 187}, 90%, 65%)`, dash: null }
@@ -1466,31 +1456,52 @@ const getLineFlowColor = line => {
   return '#67e8f9' // 默认亮青色发光
 }
 
+/**
+ * 计算导线宽度
+ * 根据导线传输功率与容量的比值，动态调整导线显示宽度
+ * 功率越大，导线越粗，直观反映线路负载程度
+ * @param {Object} line - 导线对象
+ * @returns {number} 导线宽度（2-6px）
+ */
 const getLineWidth = line => {
   // 如果仿真未运行，返回默认宽度
   if (!simulationRunning.value) return 2
 
   const power = Number(line.power) || 0
-  const minW = 2
-  const maxW = 6
-  const capacity = getLineCapacity(line)
-  const ratio = Math.max(0, Math.min(1, power / capacity))
-  return minW + (maxW - minW) * ratio
+  const minW = 2   // 最小宽度
+  const maxW = 6   // 最大宽度
+  const capacity = getLineCapacity(line)  // 获取线路容量
+  const ratio = Math.max(0, Math.min(1, power / capacity))  // 负载率（0-1）
+  return minW + (maxW - minW) * ratio  // 线性插值计算宽度
 }
 
+/**
+ * 计算导线不透明度
+ * 根据导线传输功率与容量的比值，动态调整导线显示透明度
+ * 功率越大，导线越不透明，突出高负载线路
+ * @param {Object} line - 导线对象
+ * @returns {number} 不透明度（0.4-1）
+ */
 const getLineOpacity = line => {
   // 如果仿真未运行，返回默认不透明度
   if (!simulationRunning.value) return 1
 
   const power = Number(line.power) || 0
-  const minO = 0.4
-  const maxO = 1
+  const minO = 0.4  // 最小不透明度
+  const maxO = 1    // 最大不透明度
   const capacity = getLineCapacity(line)
   const ratio = Math.max(0, Math.min(1, power / capacity))
   return minO + (maxO - minO) * ratio
 }
 
+/**
+ * 获取导线描边样式
+ * 根据导线选中状态和功率情况，返回对应的样式对象
+ * @param {Object} line - 导线对象
+ * @returns {Object} 包含 strokeWidth、opacity、filter 的样式对象
+ */
 const getLineStrokeStyle = line => {
+  // 如果导线被选中，显示高亮样式（加粗 + 发光效果）
   if (selectedLineId.value != null && line.id === selectedLineId.value) {
     return {
       strokeWidth: getLineWidth(line) + 3,
@@ -1504,29 +1515,52 @@ const getLineStrokeStyle = line => {
     strokeWidth: getLineWidth(line),
     opacity: getLineOpacity(line),
   }
+  // 仿真运行时有功率的导线隐藏（由动画效果控制显示）
   if (simulationRunning.value && hasPower) {
     base.opacity = 0
   } else if (!hasPower) {
+    // 无功率的导线显示为半透明
     base.opacity = 0.4
   }
   return base
 }
 
+/**
+ * 获取导线箭头标记
+ * 根据导线状态返回对应的箭头 SVG 标记 ID
+ * @param {Object} line - 导线对象
+ * @returns {string} 箭头标记 ID
+ */
 const getLineMarker = line => {
-  if (line.status === 'warning') return 'url(#arrow-warning)'
-  if (line.status === 'error') return 'url(#arrow-error)'
-  if (line.status === 'offline') return 'url(#arrow-offline)'
-  return 'url(#arrow-normal)'
+  if (line.status === 'warning') return 'url(#arrow-warning)'   // 警告状态（黄色箭头）
+  if (line.status === 'error') return 'url(#arrow-error)'       // 错误状态（红色箭头）
+  if (line.status === 'offline') return 'url(#arrow-offline)'   // 离线状态（灰色箭头）
+  return 'url(#arrow-normal)'  // 正常状态（青色箭头）
 }
 
+/**
+ * 获取临时颜色（预留函数）
+ * @returns {string} 颜色值
+ */
 const getTempColor = () => '#67c23a'
 
+/**
+ * 格式化数字显示
+ * 将数值格式化为保留两位小数的字符串
+ * @param {number} value - 待格式化的数值
+ * @returns {string} 格式化后的字符串，无效值返回 '-'
+ */
 const formatNumber = value => {
   const num = Number(value)
   if (!isFinite(num)) return '-'
   return num.toFixed(2)
 }
 
+/**
+ * AI 调度结果摘要（计算属性）
+ * 从 AI 调度结果中提取关键统计数据
+ * @returns {Object|null} 包含变压器数量、开关数量、用户数量、总需求功率、总输出功率的摘要对象
+ */
 const aiSummary = computed(() => {
   const r = aiGlobal.value.lastResult
   if (!r) return null
@@ -1534,36 +1568,47 @@ const aiSummary = computed(() => {
   const transformers = snapshot.transformers || {}
   const switchesSnapshot = snapshot.switches || {}
   const users = snapshot.users || {}
+  
+  // 计算用户总需求功率
   let totalDemandKw = 0
   Object.values(users).forEach(u => {
     const v = Number(u.demandPowerKw)
     if (isFinite(v)) totalDemandKw += v
   })
+  
+  // 计算变压器总输出功率
   let totalRequiredKw = 0
   const required = r.requiredPower || {}
   Object.values(required).forEach(v => {
     const n = Number(v)
     if (isFinite(n)) totalRequiredKw += n
   })
+  
   return {
-    transformerCount: Object.keys(transformers).length,
-    switchCount: Object.keys(switchesSnapshot).length,
-    userCount: Object.keys(users).length,
-    totalDemandKw,
-    totalRequiredKw,
+    transformerCount: Object.keys(transformers).length,  // 变压器数量
+    switchCount: Object.keys(switchesSnapshot).length,   // 开关数量
+    userCount: Object.keys(users).length,                // 用户数量
+    totalDemandKw,    // 用户总需求功率 (kW)
+    totalRequiredKw,  // 变压器总输出功率 (kW)
   }
 })
 
+/**
+ * 构建变压器图表数据
+ * 从 AI 调度结果中提取变压器的功率数据，用于 ECharts 柱状图展示
+ * @returns {Object} 包含 names、current、loss、backendIds 的数据对象
+ */
 const buildTransformerChartData = () => {
   const r = aiGlobal.value.lastResult
   if (!r || !r.aiResults || !r.aiResults.transformers) {
     return { names: [], current: [], loss: [], backendIds: [] }
   }
   const transformers = r.aiResults.transformers
-  const names = []
-  const current = []
-  const loss = []
-  const backendIds = []
+  const names = []       // 变压器名称列表
+  const current = []     // 当前功率列表
+  const loss = []        // 损耗功率列表
+  const backendIds = []  // 后端 ID 列表（用于图表点击时定位组件）
+  
   Object.keys(transformers).forEach(key => {
     const item = transformers[key] || {}
     const cur = Number(item.currentPowerKw)
@@ -1580,10 +1625,16 @@ const buildTransformerChartData = () => {
   return { names, current, loss, backendIds }
 }
 
+/**
+ * 构建线路图表数据
+ * 从当前线路列表中提取功率数据，用于 ECharts 柱状图展示
+ * @returns {Object} 包含 names、power、lineIds 的数据对象
+ */
 const buildLineChartData = () => {
-  const names = []
-  const power = []
-  const lineIds = []
+  const names = []    // 线路名称列表
+  const power = []    // 功率列表
+  const lineIds = []  // 线路 ID 列表（用于图表点击时定位线路）
+  
   lines.value.forEach(line => {
     const name = line.name || `线路-${line.id}`
     const p = Number(line.power)
@@ -1594,8 +1645,16 @@ const buildLineChartData = () => {
   return { names, power, lineIds }
 }
 
+/**
+ * 应用图表高亮效果
+ * 实现画布组件与图表的联动高亮：
+ * - 当用户在画布上选中组件时，对应图表数据项高亮
+ * - 当用户取消选中时，所有图表恢复正常显示
+ */
 const applyChartHighlight = () => {
   if (!chartVisible.value) return
+  
+  // 先取消所有图表的高亮状态（重置）
   if (transformerChartInstance) {
     transformerChartInstance.dispatchAction({ type: 'downplay', seriesIndex: 0 })
     transformerChartInstance.dispatchAction({ type: 'downplay', seriesIndex: 1 })
@@ -1604,6 +1663,7 @@ const applyChartHighlight = () => {
     lineChartInstance.dispatchAction({ type: 'downplay', seriesIndex: 0 })
   }
 
+  // 如果选中了变压器组件，在图表中高亮对应数据
   if (selectedCloneId.value != null && transformerChartInstance) {
     const clone = clones.value.find(c => c.id === selectedCloneId.value)
     const backendId = clone?.backendId
@@ -1612,11 +1672,13 @@ const applyChartHighlight = () => {
         ? lastTransformerChartData.value.backendIds.findIndex(v => v === backendId)
         : -1
     if (idx >= 0) {
+      // 高亮变压器的两个数据系列（有功功率、损耗功率）
       transformerChartInstance.dispatchAction({ type: 'highlight', seriesIndex: 0, dataIndex: idx })
       transformerChartInstance.dispatchAction({ type: 'highlight', seriesIndex: 1, dataIndex: idx })
     }
   }
 
+  // 如果选中了导线，在线路图表中高亮对应数据
   if (selectedLineId.value != null && lineChartInstance) {
     const idx = lastLineChartData.value.lineIds.findIndex(v => v === selectedLineId.value)
     if (idx >= 0) {
@@ -1625,6 +1687,11 @@ const applyChartHighlight = () => {
   }
 }
 
+/**
+ * 从图表选中变压器
+ * 当用户点击变压器图表中的数据项时，选中对应的画布组件
+ * @param {number} cloneId - 组件 ID
+ */
 const selectTransformerFromMonitor = cloneId => {
   selectedCloneId.value = cloneId
   selectedLineId.value = null
@@ -1633,6 +1700,11 @@ const selectTransformerFromMonitor = cloneId => {
   })
 }
 
+/**
+ * 从图表选中线路
+ * 当用户点击线路图表中的数据项时，选中对应的画布导线
+ * @param {number} lineId - 导线 ID
+ */
 const selectLineFromMonitor = lineId => {
   selectedLineId.value = lineId
   selectedCloneId.value = null
@@ -1641,7 +1713,13 @@ const selectLineFromMonitor = lineId => {
   })
 }
 
+/**
+ * 更新变压器功率图表
+ * 使用 ECharts 渲染变压器功率柱状图（堆叠图：有功功率 + 损耗功率）
+ * 支持点击图表数据项选中对应画布组件
+ */
 const updateTransformerChart = () => {
+  // 前置检查：图表可见性、DOM 元素存在性、尺寸有效性
   if (!chartVisible.value) return
   if (!transformerChartRef.value) return
   if (transformerChartRef.value.clientWidth === 0 || transformerChartRef.value.clientHeight === 0) return
@@ -1652,6 +1730,7 @@ const updateTransformerChart = () => {
     transformerChartInstance = null
   }
 
+  // 初始化 ECharts 实例
   transformerChartInstance = echarts.init(transformerChartRef.value)
   const data = buildTransformerChartData()
   lastTransformerChartData.value = data
@@ -1661,20 +1740,21 @@ const updateTransformerChart = () => {
   transformerChartRef.value.style.height = `${autoHeight}px`
   transformerChartInstance.resize()
 
+  // 图表配置项
   const option = {
-    tooltip: { trigger: 'axis' },
-    legend: { top: 0, right: 0 },
-    grid: { top: 50, right: 10, bottom: 20, left: 40 },
-    xAxis: { type: 'category', data: data.names },
-    yAxis: { type: 'value', name: 'kW' },
-    animation: false,
+    tooltip: { trigger: 'axis' },           // 鼠标悬停显示提示框
+    legend: { top: 0, right: 0 },           // 图例位置
+    grid: { top: 50, right: 10, bottom: 20, left: 40 },  // 图表边距
+    xAxis: { type: 'category', data: data.names },       // X 轴：变压器名称
+    yAxis: { type: 'value', name: 'kW' },                // Y 轴：功率值
+    animation: false,                        // 禁用动画（提升性能）
     series: [
       {
         name: '有功功率',
         type: 'bar',
-        stack: 'total',
-        itemStyle: { color: '#409eff' },
-        emphasis: { itemStyle: { borderColor: '#111827', borderWidth: 2 } },
+        stack: 'total',                      // 堆叠显示
+        itemStyle: { color: '#409eff' },     // 蓝色
+        emphasis: { itemStyle: { borderColor: '#111827', borderWidth: 2 } },  // 高亮样式
         data: data.current,
         animation: false,
       },
@@ -1682,16 +1762,16 @@ const updateTransformerChart = () => {
         name: '损耗功率',
         type: 'bar',
         stack: 'total',
-        itemStyle: { color: '#f56c6c' },
+        itemStyle: { color: '#f56c6c' },     // 红色
         emphasis: { itemStyle: { borderColor: '#111827', borderWidth: 2 } },
         data: data.loss,
         animation: false,
       },
     ],
   }
-  transformerChartInstance.setOption(option, true) // 添加 true 参数，不合并旧配置
+  transformerChartInstance.setOption(option, true) // true 参数表示不合并旧配置
 
-  // 每次图表重新创建后都需要重新绑定点击事件
+  // 绑定点击事件：点击图表数据项时选中对应画布组件
   transformerChartInstance.off('click') // 先解绑之前的
   transformerChartInstance.on('click', params => {
     if (!params || params.componentType !== 'series') return
@@ -1703,7 +1783,13 @@ const updateTransformerChart = () => {
   applyChartHighlight()
 }
 
+/**
+ * 更新线路功耗图表
+ * 使用 ECharts 渲染线路功耗柱状图
+ * 支持点击图表数据项选中对应画布导线
+ */
 const updateLineChart = () => {
+  // 前置检查
   if (!chartVisible.value) return
   if (!lineChartRef.value) return
   if (lineChartRef.value.clientWidth === 0 || lineChartRef.value.clientHeight === 0) return
@@ -1714,15 +1800,17 @@ const updateLineChart = () => {
     lineChartInstance = null
   }
 
+  // 初始化 ECharts 实例
   lineChartInstance = echarts.init(lineChartRef.value)
   const data = buildLineChartData()
   lastLineChartData.value = data
 
-  // 动态计算高度：基础高度 + 每个条目 30px
+  // 动态计算高度
   const autoHeight = Math.max(140, data.names.length * 30 + 60)
   lineChartRef.value.style.height = `${autoHeight}px`
   lineChartInstance.resize()
 
+  // 图表配置项
   const option = {
     tooltip: { trigger: 'axis' },
     legend: { top: 0, right: 0 },
@@ -1730,7 +1818,7 @@ const updateLineChart = () => {
     xAxis: {
       type: 'category',
       data: data.names,
-      axisLabel: { interval: 0, rotate: 30 },
+      axisLabel: { interval: 0, rotate: 30 },  // X 轴标签旋转 30 度，避免重叠
     },
     yAxis: {
       type: 'value',
@@ -1741,17 +1829,17 @@ const updateLineChart = () => {
       {
         name: '线路功耗',
         type: 'bar',
-        itemStyle: { color: '#e6a23c' },
+        itemStyle: { color: '#e6a23c' },     // 橙色
         emphasis: { itemStyle: { borderColor: '#111827', borderWidth: 2 } },
         data: data.power,
         animation: false,
       },
     ],
   }
-  lineChartInstance.setOption(option, true) // 添加 true 参数，不合并旧配置
+  lineChartInstance.setOption(option, true)
 
-  // 每次图表重新创建后都需要重新绑定点击事件
-  lineChartInstance.off('click') // 先解绑之前的
+  // 绑定点击事件：点击图表数据项时选中对应画布导线
+  lineChartInstance.off('click')
   lineChartInstance.on('click', params => {
     if (!params || params.componentType !== 'series') return
     const lineId = lastLineChartData.value.lineIds[params.dataIndex]
@@ -4836,7 +4924,7 @@ onBeforeUnmount(() => {
             :x="getLineMidPoint(line).x"
             :y="getLineMidPoint(line).y"
           >
-            {{ Number(line.power).toFixed(2) }} kVA
+            {{ Number(line.power).toFixed(2) }} kW
           </text>
         </template>
         <path

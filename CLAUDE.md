@@ -2,122 +2,180 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## Project overview
 
-This is a graduation project (毕业设计) - a power distribution network simulation system with AI-based dispatch. It simulates transformer networks, users, and switches, with AI agents (Coze) for power allocation optimization.
+This repository is a full-stack power network simulation app:
 
-## Tech Stack
+- `app.py` is the single Flask backend. It stores the entire network topology and dispatch state in in-memory global dictionaries, exposes all JSON APIs, calls Coze agents, and serves the built frontend from `front-end/dist`.
+- `front-end/` is a Vue 3 + Vite single-page app. The main application logic lives almost entirely in `front-end/src/views/MainView.vue`.
+- The frontend talks directly to the backend at `http://127.0.0.1:5000` via `fetch`; there is no Vite proxy configured.
 
-**Backend:**
-- Python Flask (single-file backend: `app.py`)
-- Coze AI SDK for intelligent agent integration
-- CORS enabled for frontend-backend communication
+## Common commands
 
-**Frontend:**
-- Vue 3 (Composition API with `<script setup>`)
-- Vite build tool
-- Pinia for state management
-- Element Plus UI component library
-- ECharts for data visualization
-- Vue Router for navigation
+### Frontend (`front-end/`)
 
-## Commands
-
-### Frontend Development
-```sh
+```bash
 cd front-end
-pnpm install          # Install dependencies
-pnpm dev             # Start dev server (Vite, hot-reload)
-pnpm build           # Production build (outputs to front-end/dist)
-pnpm preview         # Preview production build
+pnpm install
+pnpm dev
+pnpm build
+pnpm preview
 ```
 
-### Backend Development
-```sh
-python app.py        # Start Flask server (port 5000)
+Notes:
+- `front-end/package.json` only defines `dev`, `build`, and `preview` scripts.
+- There is no configured frontend test or lint script in `front-end/package.json`.
+- There is no single-test command configured because no test runner is currently set up.
+- Vite requires Node `^20.19.0 || >=22.12.0`.
+
+### Backend (repo root)
+
+```bash
+python app.py
 ```
 
-### Full Stack Setup
-1. Build frontend: `cd front-end && pnpm build`
-2. Run backend: `python app.py`
-3. Access app at `http://127.0.0.1:5000`
+Notes:
+- The Flask app runs on `0.0.0.0:5000` with `debug=True`.
+- `app.py` expects the frontend build output at `front-end/dist`; if that directory is missing, it prints a warning and still starts.
+- The backend imports `flask`, `flask_cors`, and `cozepy`. There is no `requirements.txt` or `pyproject.toml` in the repo, so dependency installation must be inferred from imports.
+
+### Full app workflow
+
+For local development, run these in separate terminals:
+
+```bash
+cd front-end && pnpm dev
+python app.py
+```
+
+For backend-served frontend output:
+
+```bash
+cd front-end && pnpm build
+python app.py
+```
 
 ## Architecture
 
-### Backend (`app.py`)
-Single-file Flask application with:
-- **Core Classes:**
-  - `TransformerCalculator` - Local transformer loss calculation (replaces AI calls for performance)
-  - `Transformer` - Transformer device with power/loss attributes
-  - `User` - Power consumer with load profiles (6 time slices)
-  - `Switch` - Power distribution switch with configuration
-  - `Wire` - Connection between components
+### Backend state model
 
-- **Dispatch System:**
-  - Time-slice simulation (6 time points: 0:00, 4:00, 8:00, 12:00, 16:00, 20:00)
-  - AI-powered switch dispatch via Coze agents
-  - Blackboard pattern for sharing state between dispatch steps
-  - Planning suggestions system for network optimization
+`app.py` is stateful and keeps the whole simulation in module-level globals instead of a database:
 
-- **Key API Endpoints:**
-  - `POST /api/nodes` - Create transformer/user/switch
-  - `POST /api/wires` - Create connections
-  - `POST /api/dispatch/init` - Initialize dispatch
-  - `POST /api/dispatch/switch/:id` - Dispatch single switch
-  - `POST /api/dispatch/continue` - Advance time slice
-  - `POST /api/dispatch/finalize` - Finalize and get results
-  - `GET/POST /api/planning-suggestions` - Get AI planning advice
+- `transformers`, `users`, `switches`, `wires`: core topology objects
+- `next_node_id`, `next_wire_id`: in-memory ID counters
+- `blackboard`: shared AI/dispatch/planning state
+- `current_time_slice`: current index into the 6-point daily load profile
 
-### Frontend (`front-end/src/`)
-```
-front-end/src/
-├── main.js              # App entry - imports Vue, Pinia, Element Plus
-├── App.vue              # Root component
-├── router/index.js      # Vue Router config (4 routes)
-├── assets/base.css      # Global styles with CSS variables
-├── components/
-│   └── Loading.vue      # Loading component
-└── views/
-    ├── WelcomeView.vue  # Welcome page
-    ├── MainView.vue     # Main canvas - drag-drop, wiring, AI dispatch
-    └── NotFound.vue     # 404 page
-```
+This means:
+- state resets when the Flask process restarts
+- most frontend actions must stay synchronized with backend-created IDs
+- debugging often requires inspecting both frontend local state and backend globals
 
-### MainView.vue Architecture
-- **Canvas System:** Drag-drop components, pan/zoom support
-- **Linking System:** Connect components to form power network topology
-- **Parameter Editor:** Contextual panel for editing component properties
-- **Simulation Engine:** Multi-time-slice power flow simulation
-- **Visualization:** ECharts charts for transformer power, line losses
+### Backend domain model
 
-## Key Patterns
+Core classes in `app.py`:
 
-### Node Types
-- `transformer` - Power transformer (200kVA or 630kVA capacity)
-- `user` - Power consumer (residential/commercial/industrial with load profiles)
-- `switch` - Distribution switch with config dict `{transformerId: enabled}`
+- `Transformer`: stores rated capacity, current power, losses, and derived max active power
+- `User`: stores user type plus a 6-point `load_profile`
+- `Switch`: stores transformer enablement in `config`
+- `Wire`: stores graph connections between components
+- `TransformerCalculator`: local deterministic loss calculator used instead of AI for transformer loss computation
 
-### Time-Slice Simulation
-- 6 time slices representing 24-hour cycle
-- Each user has a load profile array `[P0, P4, P8, P12, P16, P20]`
-- Dispatch runs per time slice, updating user demand dynamically
+Important domain detail:
+- transformer nameplate capacity is treated as kVA, while active power is derived with fixed power factor `0.8`
+- time slices are fixed to 6 labels: `0:00`, `4:00`, `8:00`, `12:00`, `16:00`, `20:00`
 
-### Blackboard Pattern
-Global state (`blackboard`) shared across dispatch steps:
-- `ai_results` - AI agent responses for transformers/users/switches
-- `dispatch_state` - Intermediate dispatch calculations
-- `planning_suggestions` - AI-generated network optimization advice
+### Dispatch pipeline
 
-## Environment Variables
-- `COZE_API_TOKEN` - Coze API authentication token
-- `COZE_BOT_ID_*` - Bot IDs for dispatch/switch/planning agents
-- `COZE_USER_ID` - User identifier for Coze API calls
+The dispatch flow in `app.py` is multi-step and should be preserved when changing simulation behavior:
 
-## Development Notes
-- Frontend serves static files from `front-end/dist` via Flask in production
-- Transformer loss calculation uses local formulas (no AI call needed):
-  - Load factor β = S_current / S_rated
-  - Load loss P_k = β² × P_kn (rated load loss)
-  - Total loss = No-load loss + Load loss
-- Power factor fixed at 0.8 for calculations
-- Network topology: Transformer → Switch → User
+1. `init_dispatch()` or `init_dispatch_continue()` initializes the current time slice and remaining demand/capacity.
+2. `dispatch_switch(sid, is_continue=False)` dispatches one switch at a time.
+3. `get_switch_ai_params()` sends structured JSON topology data to the Coze switch agent.
+4. `_sanitize_switch_plan()` clamps AI output to actual adjacency, remaining demand, and remaining transformer capacity.
+5. `finalize_dispatch()` recomputes transformer output/loss locally and returns the final snapshot.
+
+The frontend uses the stepwise API (`/api/dispatch/init`, `/api/dispatch/switch/<id>`, `/api/dispatch/finalize`) rather than relying only on the older `/api/ai-dispatch` endpoint.
+
+### Planning/advice system
+
+Planning suggestions are a separate backend flow from dispatch:
+
+- `build_network_topology()` summarizes the current network
+- `get_planning_advice_from_ai()` calls the Coze planning agent
+- `analyze_network_redundancy()` adds local heuristic suggestions
+- `/api/apply-suggestion` mutates topology directly by creating/deleting wires or adding components
+
+When changing planning behavior, check both the Coze-driven path and the local redundancy-analysis fallback logic.
+
+### Frontend structure
+
+Important frontend entry points:
+
+- `front-end/src/main.js`: creates the Vue app, installs Pinia, router, and Element Plus
+- `front-end/src/router/index.js`: routes `/home` to `WelcomeView.vue`, `/main` to `MainView.vue`, and uses history mode
+- `front-end/src/App.vue`: owns the route transition/loading overlay logic and wraps routed pages in `<keep-alive>`
+- `front-end/src/components/Loading.vue`: fullscreen loading overlay used for route transitions
+- `front-end/src/views/WelcomeView.vue`: animated landing page
+- `front-end/src/views/MainView.vue`: main editor/simulator UI
+
+### Frontend design constraints
+
+`front-end/src/views/MainView.vue` is the central file for almost all product behavior. It contains:
+
+- drag/drop canvas state
+- node and wire creation/editing
+- context menus
+- backend synchronization via `fetch`
+- AI dispatch orchestration
+- simulation engine state machine
+- planning suggestion UI
+- ECharts visualization logic
+- import/export/reset flows
+
+Before refactoring `MainView.vue`, check whether a change touches both local canvas state and backend persistence/stateful APIs.
+
+### Frontend/backend synchronization
+
+The frontend keeps its own local node/line objects and also stores backend IDs (`backendId`) returned by Flask APIs. Many operations are mirrored:
+
+- create node locally and on backend
+- create wire locally and on backend
+- update/delete node or wire locally and on backend
+- run simulation against backend state, then hydrate local UI from AI results
+
+Be careful not to update only one side.
+
+## API surface
+
+Major backend routes defined in `app.py`:
+
+- topology CRUD: `/api/nodes`, `/api/nodes/<id>`, `/api/wires`, `/api/wires/<id>`
+- dispatch: `/api/dispatch/init`, `/api/dispatch/continue`, `/api/dispatch/switch/<id>`, `/api/dispatch/finalize`, `/api/ai-dispatch`
+- AI/planning state: `/api/blackboard`, `/api/blackboard/<kind>/<id>`, `/api/planning-suggestions`, `/api/network-analysis`
+- automation/mutations: `/api/apply-suggestion`, `/api/reset-all`
+- metadata: `/api/user-types`, `/api/users/<id>`
+
+If frontend API calls need to change, update both `MainView.vue` and the Flask route handlers in `app.py`.
+
+## Coze integration
+
+`app.py` initializes Coze from environment variables, with hardcoded fallbacks currently present in code:
+
+- `COZE_API_TOKEN`
+- `COZE_BOT_ID_100KW`
+- `COZE_BOT_ID_500KW`
+- `COZE_BOT_ID_SWITCH`
+- `COZE_BOT_ID_ADVICE`
+- `COZE_USER_ID`
+
+The active Coze usage in this codebase is primarily for:
+- switch-level dispatch plans
+- planning suggestions
+
+Transformer loss calculation is handled locally by `TransformerCalculator` instead of AI.
+
+## Existing docs/config sources
+
+- `front-end/README.md` is the default Vite/Vue template README and only contributes the standard `pnpm install`, `pnpm dev`, and `pnpm build` workflow.
+- No `.cursorrules`, `.cursor/rules/`, or `.github/copilot-instructions.md` were found in this repository.
