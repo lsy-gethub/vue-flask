@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  web:
+    # 采用您提供的阿里云镜像地址和 latest 标签
+    image: crpi-7rt3c8exgs9gnzox.cn-hangzhou.personal.cr.aliyuncs.com/lsy-mmkj/bysj:latest
+    container_name: bysj_web
+    ports:
+      - "80:5000"  # 将主机的 80 端口映射到容器内的 5000 端口
+    environment:
+      # 以下根据 app.py 提取出的 Coze 配置环境变量
+      # 如果有真实的 API Token，请替换下方的 your_coze_api_token
+      - COZE_API_TOKEN=${COZE_API_TOKEN:-your_coze_api_token}
+      - COZE_BOT_ID_100KW=7594731318777397284
+      - COZE_BOT_ID_500KW=7599587749351931914
+      - COZE_BOT_ID_SWITCH=7599882439477592115
+      - COZE_BOT_ID_ADVICE=7615261656637227014
+      - COZE_USER_ID=123456789
+    restart: always  # 宕机或重启自动拉起容器
