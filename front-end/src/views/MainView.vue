@@ -23,8 +23,8 @@ const transformer_image_path2 = 'image/transformer2.png'
 const jumindi_image_path = 'image/jumindi.png'
 const shangchang_image_path = 'image/shangchang.png'
 const huagongchang_image_path = 'image/huagongchang.png'
-// 后端 API 基础 URL
-const backend_base_url = 'http://127.0.0.1:5000'
+// 后端 API 基础 URL（生产环境使用相对路径，开发环境通过 vite proxy 代理）
+const backend_base_url = ''
 
 // ==================== 画布状态 ====================
 // 画布 DOM 引用

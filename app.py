@@ -2578,7 +2578,7 @@ def serve_frontend(path):
     dist_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'front-end', 'dist')
 
     # 如果文件存在，返回静态文件
-    if path and os.path.exists(os.path.join(dist_folder, path)):
+    if path and os.path.isfile(os.path.join(dist_folder, path)):
         return send_from_directory(dist_folder, path)
 
     # 否则返回 index.html（支持 Vue Router 的 history 模式）
