@@ -34,5 +34,5 @@ COPY --from=frontend-builder /app/front-end/dist /app/front-end/dist
 # 暴露 Flask 端口
 EXPOSE 5000
 
-# 使用 Gunicorn 作为生产级 WSGI 服务器启动
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
+# 使用 Gunicorn 作为生产级 WSGI 服务器启动（注意：因为后端使用内存存储状态，必须使用单进程多线程模型）
+CMD ["gunicorn", "-w", "1", "--threads", "4", "-b", "0.0.0.0:5000", "app:app"]

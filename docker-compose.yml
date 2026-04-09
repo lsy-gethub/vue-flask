@@ -9,8 +9,8 @@ services:
       - "80:5000"  # 将主机的 80 端口映射到容器内的 5000 端口
     environment:
       # 以下根据 app.py 提取出的 Coze 配置环境变量
-      # 如果有真实的 API Token，请替换下方的 your_coze_api_token
-      - COZE_API_TOKEN=${COZE_API_TOKEN:-your_coze_api_token}
+      # 如果有真实的 API Token，请替换下方的 pat_... 默认值
+      - COZE_API_TOKEN=${COZE_API_TOKEN:-pat_Ay5MQdVJ3ZRP9q7l3YoHHb4jlTjbEhNks5cP9hatMMCkUGgzq1JeoDKPnFDz5ky9}
       - COZE_BOT_ID_100KW=7594731318777397284
       - COZE_BOT_ID_500KW=7599587749351931914
       - COZE_BOT_ID_SWITCH=7599882439477592115

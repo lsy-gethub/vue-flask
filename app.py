@@ -854,7 +854,11 @@ def dispatch_switch(sid, is_continue=False):
         dict: 包含 switchId 和 plan（调度计划）
     """
     if 'dispatch_state' not in blackboard:
-        return {'error': 'Dispatch not initialized'}
+        # 如果没有 dispatch_state，可能是因为没有初始化
+        # 尝试调用 init_dispatch 初始化
+        init_dispatch()
+        if 'dispatch_state' not in blackboard:
+            return {'error': 'Dispatch not initialized'}
 
     state = blackboard['dispatch_state']
     sw = switches.get(sid)
@@ -975,7 +979,15 @@ def finalize_dispatch():
         dict: 包含 snapshot, requiredPower, aiResults, currentTimeSlice
     """
     if 'dispatch_state' not in blackboard:
-        return {'error': 'Dispatch not initialized'}
+        # 如果没有 dispatch_state，可能是因为没有开关可以调度
+        # 初始化一个基础 state 以便返回正确格式的数据
+        blackboard['dispatch_state'] = {
+            'remaining_demand_kw': {},
+            'remaining_transformer_kw': {},
+            'allocated_kw_by_transformer': {},
+            'snapshot': {},
+            'required_power': {}
+        }
 
     state = blackboard['dispatch_state']
     ai_results = blackboard.get('ai_results', {})
@@ -1458,7 +1470,7 @@ def _find_node(node_id):
     return None, None
 
 
-@app.route('/api/nodes/<int:node_id>', methods=['PUT', 'PATCH', 'DELETE'])
+@app.route('/api/nodes/<int:node_id>', methods=['GET', 'PUT', 'PATCH', 'DELETE'])
 def node_detail(node_id):
     """
     节点详情 API
@@ -1470,6 +1482,12 @@ def node_detail(node_id):
     - DELETE: 删除节点（幂等：不存在时也返回成功）
     """
     node, kind = _find_node(node_id)
+
+    if request.method == 'GET':
+        if node is None:
+            return jsonify({'error': 'node not found'}), 404
+        # 补充：获取节点信息
+        return jsonify(node.to_dict() if hasattr(node, 'to_dict') else {'id': node.id, 'name': node.name})
 
     if request.method == 'DELETE':
         # 幂等删除：资源不存在时也返回成功
@@ -1532,6 +1550,18 @@ def wire_detail(wire_id):
     - DELETE: 删除导线（幂等：不存在时也返回成功）
     """
     wire = wires.get(wire_id)
+
+    if request.method == 'GET':
+        if wire is None:
+            return jsonify({'error': 'wire not found'}), 404
+        return jsonify(wire.to_dict() if hasattr(wire, 'to_dict') else {
+            'id': wire.id,
+            'name': wire.name,
+            'power': wire.power,
+            'status': wire.status,
+            'fromComponent': wire.from_component,
+            'toComponent': wire.to_component
+        })
 
     if request.method == 'DELETE':
         # 幂等删除：资源不存在时也返回成功

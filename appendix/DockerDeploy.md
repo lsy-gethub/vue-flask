@@ -138,8 +138,8 @@ COPY --from=frontend-builder /app/front-end/dist /app/front-end/dist
 # 暴露端口（Flask 默认 5000）
 EXPOSE 5000
 
-# 生产环境推荐使用 gunicorn 启动 Flask
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5000", "app:app"]
+# 生产环境推荐使用 gunicorn 启动 Flask (注意：必须使用单进程，否则内存状态不同步)
+CMD ["gunicorn", "-w", "1", "--threads", "4", "-b", "0.0.0.0:5000", "app:app"]
 ```
 
 ### 推荐的 docker-compose.yml 模板
@@ -154,7 +154,8 @@ services:
       - "80:5000"  # 将云主机的 80 端口映射到容器的 5000 端口
     environment:
       # 在这里配置您的 Coze API Token 和其他环境变量
-      - COZE_API_TOKEN=your_token_here
+      # 推荐使用 ${COZE_API_TOKEN:-默认值} 的形式，以避免未设置环境变量时覆盖代码中的默认有效 Token
+      - COZE_API_TOKEN=${COZE_API_TOKEN:-pat_Ay5MQdVJ3ZRP9q7l3YoHHb4jlTjbEhNks5cP9hatMMCkUGgzq1JeoDKPnFDz5ky9}
       - COZE_BOT_ID_100KW=7594731318777397284
     restart: always  # 崩溃或服务器重启后自动重启
 ```
@@ -169,4 +170,3 @@ services:
 2. [ ] 在项目根目录生成 `.dockerignore`。
 3. [ ] 结合您的阿里云实际信息，生成确切的 `Dockerfile` 和 `docker-compose.yml`。
 4. [ ] 指导您在本地进行 `docker build` 并推送到阿里云。
-
