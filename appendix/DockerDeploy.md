@@ -32,16 +32,16 @@ app = Flask(__name__, static_folder='front-end/dist', static_url_path='')
 
 ```bash
 # 替换为您的阿里云镜像仓库地址
-docker build -t registry.cn-xxx.aliyuncs.com/您的命名空间/您的仓库名:v1 .
+docker build -t crpi-7rt3c8exgs9gnzox.cn-hangzhou.personal.cr.aliyuncs.com/lsy-mmkj/bysj:latest .
 ```
 
 **3. 推送镜像到阿里云**
 
 ```bash
 # 登录阿里云镜像仓库
-docker login --username=您的阿里云账号 registry.cn-xxx.aliyuncs.com
+docker login --username=aliyun8823713937 crpi-7rt3c8exgs9gnzox.cn-hangzhou.personal.cr.aliyuncs.com
 # 推送镜像
-docker push registry.cn-xxx.aliyuncs.com/您的命名空间/您的仓库名:v1
+docker push crpi-7rt3c8exgs9gnzox.cn-hangzhou.personal.cr.aliyuncs.com/lsy-mmkj/bysj:latest
 ```
 
 ### 阶段二：云服务器环境初始化 (Aliyun ECS)
@@ -96,10 +96,16 @@ cd 您的仓库目录
 
 ```bash
 # 登录阿里云镜像仓库（拉取私有镜像需要）
-docker login --username=您的阿里云账号 registry.cn-xxx.aliyuncs.com
+docker login --username=aliyun8823713937 crpi-7rt3c8exgs9gnzox.cn-hangzhou.personal.cr.aliyuncs.com
+
+# 停止已运行容器（docker-compose.yml 中定义的容器）
+docker compose down
+
+# 拉取镜像
+docker compose pull 
 
 # 后台启动服务
-docker-compose up -d
+docker compose up -d
 ```
 
 ***
@@ -107,6 +113,7 @@ docker-compose up -d
 ## 3. 核心配置文件示例（待创建）
 
 ### 推荐的 Dockerfile 模板
+
 ```dockerfile
 # ==================== 阶段一：前端构建 ====================
 FROM node:20-alpine AS frontend-builder
@@ -170,3 +177,4 @@ services:
 2. [ ] 在项目根目录生成 `.dockerignore`。
 3. [ ] 结合您的阿里云实际信息，生成确切的 `Dockerfile` 和 `docker-compose.yml`。
 4. [ ] 指导您在本地进行 `docker build` 并推送到阿里云。
+
