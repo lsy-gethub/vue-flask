@@ -4290,7 +4290,7 @@ onBeforeUnmount(() => {
     </aside>
     <section class="canvas" ref="canvasRef" @mousedown="handleCanvasMouseDown" @click="handleCanvasClick" @drop="handleDrop" @dragover="handleDragOver">
       <div class="stats-overlay" :style="{ transform: `translateX(-50%) scale(${uiScale})` }">
-        <ElRow :gutter="16" class="stats-row">
+        <ElRow :gutter="8" class="stats-row">
           <ElCol :xs="24" :sm="12" :md="6" class="stats-col">
             <ElStatistic title="总有功功率 (kW)" :value="stats.maxActiveTotalKw" :precision="2" />
           </ElCol>
@@ -5450,10 +5450,10 @@ onBeforeUnmount(() => {
   pointer-events: none;
   background-color: rgba(240, 242, 245, 0.95);
   border-radius: 8px;
-  padding: 12px 24px;
+  padding: 8px 16px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border: 1px solid #dcdfe6;
-  min-width: 800px;
+  min-width: 680px;
 }
 
 .stats-row {
@@ -5462,7 +5462,7 @@ onBeforeUnmount(() => {
 }
 
 .stats-col {
-  min-width: 180px;
+  min-width: 150px;
 }
 
 .canvas-bg {
