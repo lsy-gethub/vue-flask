@@ -19,7 +19,7 @@ CORS(app)
 coze_api_base = COZE_CN_BASE_URL
 # Coze API 访问令牌，用于身份验证
 coze_api_token = os.environ.get('COZE_API_TOKEN',
-                                'pat_Ay5MQdVJ3ZRP9q7l3YoHHb4jlTjbEhNks5cP9hatMMCkUGgzq1JeoDKPnFDz5ky9')
+                                'pat_Vl8qBVEcQpYoVWL1tzct39a5eeqp0IbkqX7tXyFVLcsbrQTwHI1xMT4nBQ3lzYLb')
 # SCB18-200kVA 变压器智能体 ID
 coze_bot_id_100kw = os.environ.get('COZE_BOT_ID_100KW', '7594731318777397284')
 # SCB14-630kVA 变压器智能体 ID
@@ -95,11 +95,11 @@ class TransformerCalculator:
             
         Returns:
             tuple: (max_power_kw, loss_power_kw, no_load_loss_kw, full_load_loss_kw, answer_text)
-            - max_power_kw: 额定最大功率
-            - loss_power_kw: 总损耗功率
-            - no_load_loss_kw: 空载损耗
-            - full_load_loss_kw: 额定负载损耗
-            - answer_text: 人类可读的计算结果描述
+            max_power_kw: 额定最大功率
+            loss_power_kw: 总损耗功率
+            no_load_loss_kw: 空载损耗
+            full_load_loss_kw: 额定负载损耗
+            answer_text: 可读的计算结果描述
 
         注意：当输出功率为0时，变压器可关机，不产生损耗功率
         """
@@ -333,7 +333,7 @@ blackboard: dict[str, Any] = {
         'users': {},         # 用户 AI 结果
         'switches': {},      # 开关 AI 结果
     },
-    'dispatch': {},         # 调度状态
+    'dispatch_state': {},         # 调度状态
 }
 
 
